@@ -532,6 +532,41 @@ const INITIAL_SETTINGS = {
   custom_owners: ['Joint'],
   custom_expense_categories: ['Baby Spending', 'Car Maintenance', 'Home & Property', 'Seasonal & Family', 'Family Holidays'],
   custom_variance_categories: ['Groceries & Household', 'Dining Out & Takeaway', 'Fuel & Commute', 'Kids & Nursery', 'Unexpected Repair'],
+  annual_plans: {
+    '2025': {
+      monthlySavingsTarget: 2300,
+      annualSavingsGoal: 27600,
+      categoryBudgets: {
+        'Baby Spending': 400,
+        'Car Maintenance': 950,
+        'Home & Property': 800,
+        'Seasonal & Family': 700,
+        'Family Holidays': 1500
+      }
+    },
+    '2026': {
+      monthlySavingsTarget: 2600,
+      annualSavingsGoal: 31200,
+      categoryBudgets: {
+        'Baby Spending': 450,
+        'Car Maintenance': 1100,
+        'Home & Property': 950,
+        'Seasonal & Family': 900,
+        'Family Holidays': 1800
+      }
+    },
+    '2027': {
+      monthlySavingsTarget: 2800,
+      annualSavingsGoal: 33600,
+      categoryBudgets: {
+        'Baby Spending': 500,
+        'Car Maintenance': 1000,
+        'Home & Property': 1000,
+        'Seasonal & Family': 950,
+        'Family Holidays': 2000
+      }
+    }
+  },
   demo_cleared: false,
   layout: DEFAULT_WIDGET_LAYOUT
 };
@@ -853,6 +888,13 @@ const INFO_EXPLAINERS = {
     formula: 'Left to Route = Combined Income − Fixed Bills − Variable Budgets − Savings Transfers',
     howToChange: 'Switch to any month/year, add custom categories or owners from any dropdown, or clone a month forward.'
   }
+,
+  annual_planner: {
+    title: 'Annual Financial Year Plan, Adherence & Year-on-Year Tracker',
+    what: 'Set your household Financial Year targets at the start of the year (Monthly Savings Target + Planned Sinking Budgets per category), then track Month-by-Month Adherence, Planned vs. Actual category spend, Unplanned items, and Year-on-Year performance.',
+    formula: 'Monthly Adherence = Actual Monthly Savings (After Weekly Variances) vs. Planned Monthly Target\nUnplanned Outflows = Weekly Overspend Variances + Annual Expenses in categories with £0 planned budget',
+    howToChange: 'Adjust your Planned Monthly Savings Target or any Category Planned Budget directly in the Annual Plan & YoY tab.'
+  }
 };
 
 async function initializePWASafeguards() {
@@ -897,6 +939,7 @@ function App() {
     annual_expenditures: 'compact',
     weekly_adjustment: 'compact',
     monthly_planner: 'expanded',
+    annual_planner: 'expanded',
     data_ledger: 'expanded'
   });
   const [showPartnerSplit, setShowPartnerSplit] = useState(false);
@@ -917,6 +960,7 @@ function App() {
       annual_expenditures: mode,
       weekly_adjustment: mode,
       monthly_planner: mode,
+      annual_planner: mode,
       data_ledger: mode
     });
   };
@@ -3241,6 +3285,16 @@ function App() {
             </button>
             <button
               type="button"
+              onClick={() => setActiveView('annual_planner')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all whitespace-nowrap ${
+                activeView === 'annual_planner' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+              <span>Annual Plan & YoY ({selectedYear})</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveView('data_ledger')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all whitespace-nowrap ${
                 activeView === 'data_ledger' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
@@ -3629,94 +3683,157 @@ function App() {
               </div>
             </div>
 
-            {/* PARTNER SALARY SPLIT & ROUTING BREAKDOWN (Me vs. Partner vs. Joint) */}
-            {showPartnerSplit && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-                {[settingsMap.my_name || 'Alex', settingsMap.partner_name || 'Sam', 'Joint'].map((person) => {
-                  const personRows = currentMonthRows.filter((r) => (r.owner || 'Joint') === person);
-                  const pIncome = personRows
-                    .filter((r) => r.flow === 'income')
-                    .reduce((sum, r) => sum + (Number(r.actual ?? r.planned) || 0), 0);
-                  const pBills = personRows
-                    .filter((r) => r.flow === 'fixed_outflow' || r.flow === 'variable_outflow')
-                    .reduce((sum, r) => sum + (Number(r.actual ?? r.planned) || 0), 0);
-                  const pSavings = personRows
-                    .filter((r) => r.flow === 'savings_transfer')
-                    .reduce((sum, r) => sum + (Number(r.actual ?? r.planned) || 0), 0);
-                  const pRemaining = pIncome - pBills - pSavings;
+            {/* PARTNER SALARY SPLIT & ROUTING BREAKDOWN (Smart Owner Resolution + 1-Tap Reassign) */}
+            {showPartnerSplit && (() => {
+              const p1 = (settingsMap.my_name || 'Alex').trim();
+              const p2 = (settingsMap.partner_name || 'Sam').trim();
 
-                  return (
-                    <div
-                      key={person}
-                      className="rounded-2xl bg-zinc-900/90 border border-cyan-500/30 p-4 flex flex-col justify-between space-y-3 shadow-lg"
-                    >
-                      <div>
-                        <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
-                            <h3 className="text-sm font-bold text-white">{person}'s Split</h3>
-                          </div>
-                          <span className="text-xs font-semibold text-emerald-400">
-                            In: +{formatGBP(pIncome)}
-                          </span>
-                        </div>
+              // Smart owner resolver: checks explicit r.owner, or matches partner name inside category/notes, or checks destination account holder!
+              const resolveRowOwner = (r) => {
+                const rawOwner = (r.owner || '').trim();
+                const catLower = `${r.category || ''} ${r.notes || ''}`.toLowerCase();
+                const destAcc = accounts.find((a) => a.id === r.destinationAccountId);
 
-                        <div className="grid grid-cols-3 gap-1.5 py-2.5 text-center border-b border-zinc-800/70">
-                          <div className="p-1.5 rounded-lg bg-zinc-950">
-                            <div className="text-[10px] text-zinc-400">Bills</div>
-                            <div className="text-xs font-bold text-white mt-0.5">−{formatGBP(pBills)}</div>
-                          </div>
-                          <div className="p-1.5 rounded-lg bg-zinc-950">
-                            <div className="text-[10px] text-zinc-400">To Pots</div>
-                            <div className="text-xs font-bold text-indigo-300 mt-0.5">−{formatGBP(pSavings)}</div>
-                          </div>
-                          <div className="p-1.5 rounded-lg bg-zinc-950">
-                            <div className="text-[10px] text-zinc-400">Net Left</div>
-                            <div className="text-xs font-bold text-emerald-400 mt-0.5">{formatGBP(pRemaining)}</div>
-                          </div>
-                        </div>
+                if (rawOwner && rawOwner.toLowerCase() !== 'joint') {
+                  if (rawOwner.toLowerCase() === p1.toLowerCase() || rawOwner.toLowerCase() === 'my name' || rawOwner.toLowerCase() === 'me') return p1;
+                  if (rawOwner.toLowerCase() === p2.toLowerCase() || rawOwner.toLowerCase() === 'partner' || rawOwner.toLowerCase() === 'hers') return p2;
+                  return rawOwner;
+                }
+                // If owner was left as default 'Joint', check if category name or destination account belongs to p1 or p2
+                if (p1 && catLower.includes(p1.toLowerCase())) return p1;
+                if (p2 && catLower.includes(p2.toLowerCase())) return p2;
+                if (destAcc && destAcc.owner && destAcc.owner !== 'Joint') {
+                  if (destAcc.owner.toLowerCase() === p1.toLowerCase()) return p1;
+                  if (destAcc.owner.toLowerCase() === p2.toLowerCase()) return p2;
+                  return destAcc.owner;
+                }
+                return 'Joint';
+              };
 
-                        {/* Individual Items for this Person */}
-                        <div className="mt-2.5 space-y-1.5 max-h-52 overflow-y-auto pr-1">
-                          {personRows.length === 0 ? (
-                            <div className="text-xs text-zinc-500 py-2 text-center">No items assigned to {person}</div>
-                          ) : (
-                            personRows.map((r) => {
-                              const dest = accounts.find((a) => a.id === r.destinationAccountId);
-                              const amt = Number(r.actual ?? r.planned) || 0;
-                              return (
-                                <div
-                                  key={r.id}
-                                  className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-zinc-950/80 border border-zinc-800/80 text-xs"
-                                >
-                                  <div className="min-w-0">
-                                    <div className="font-semibold text-zinc-100 truncate">{r.category}</div>
-                                    {dest && (
-                                      <div className="text-[10px] text-cyan-300 truncate">→ {dest.name}</div>
-                                    )}
-                                  </div>
-                                  <span
-                                    className={`font-bold shrink-0 ${
-                                      r.flow === 'income'
-                                        ? 'text-emerald-400'
-                                        : r.flow === 'savings_transfer'
-                                        ? 'text-indigo-300'
-                                        : 'text-zinc-200'
-                                    }`}
-                                  >
-                                    {r.flow === 'income' ? '+' : '−'}{formatGBP(amt)}
-                                  </span>
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      </div>
+              // Build dynamic list of columns: Partner 1, Partner 2, Joint + any custom owner present in currentMonthRows
+              const extraHolders = Array.from(
+                new Set(currentMonthRows.map((r) => resolveRowOwner(r)).filter((h) => h !== p1 && h !== p2 && h !== 'Joint'))
+              );
+              const splitColumns = [p1, p2, 'Joint', ...extraHolders];
+
+              // If currentMonthRows is empty but other months have data, find the latest populated month to offer a 1-tap switch
+              const populatedMonths = Array.from(new Set(monthlyBudgets.map((m) => m.month))).sort().reverse();
+
+              return (
+                <div className="space-y-3">
+                  {currentMonthRows.length === 0 && populatedMonths.length > 0 && (
+                    <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-2 text-xs text-amber-200">
+                      <span>No entries logged in <strong>{selectedMonth}</strong> yet.</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMonth(populatedMonths[0])}
+                        className="px-3 py-1.5 rounded-xl bg-amber-500 text-zinc-950 font-bold"
+                      >
+                        Jump to {populatedMonths[0]}
+                      </button>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                    {splitColumns.map((person) => {
+                      const personRows = currentMonthRows.filter((r) => resolveRowOwner(r) === person);
+                      const pIncome = personRows
+                        .filter((r) => r.flow === 'income')
+                        .reduce((sum, r) => sum + (Number(r.actual ?? r.planned) || 0), 0);
+                      const pBills = personRows
+                        .filter((r) => r.flow === 'fixed_outflow' || r.flow === 'variable_outflow')
+                        .reduce((sum, r) => sum + (Number(r.actual ?? r.planned) || 0), 0);
+                      const pSavings = personRows
+                        .filter((r) => r.flow === 'savings_transfer')
+                        .reduce((sum, r) => sum + (Number(r.actual ?? r.planned) || 0), 0);
+                      const pRemaining = pIncome - pBills - pSavings;
+
+                      return (
+                        <div
+                          key={person}
+                          className="rounded-2xl bg-zinc-900/90 border border-cyan-500/30 p-4 flex flex-col justify-between space-y-3 shadow-lg"
+                        >
+                          <div>
+                            <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
+                                <h3 className="text-sm font-bold text-white">{person} ({personRows.length})</h3>
+                              </div>
+                              <span className="text-xs font-bold text-emerald-400 tabular-nums">
+                                In: +{formatGBP(pIncome)}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-1.5 py-2.5 text-center border-b border-zinc-800/70">
+                              <div className="p-1.5 rounded-lg bg-zinc-950">
+                                <div className="text-[10px] text-zinc-400">Bills</div>
+                                <div className="text-xs font-bold text-white mt-0.5 tabular-nums">−{formatGBP(pBills)}</div>
+                              </div>
+                              <div className="p-1.5 rounded-lg bg-zinc-950">
+                                <div className="text-[10px] text-zinc-400">To Pots</div>
+                                <div className="text-xs font-bold text-indigo-300 mt-0.5 tabular-nums">−{formatGBP(pSavings)}</div>
+                              </div>
+                              <div className="p-1.5 rounded-lg bg-zinc-950">
+                                <div className="text-[10px] text-zinc-400">Net Left</div>
+                                <div className="text-xs font-bold text-emerald-400 mt-0.5 tabular-nums">{formatGBP(pRemaining)}</div>
+                              </div>
+                            </div>
+
+                            <div className="mt-2.5 space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                              {personRows.length === 0 ? (
+                                <div className="text-xs text-zinc-500 py-3 text-center">
+                                  Tap a badge on any item below to assign it to <strong>{person}</strong>
+                                </div>
+                              ) : (
+                                personRows.map((r) => {
+                                  const dest = accounts.find((a) => a.id === r.destinationAccountId);
+                                  const amt = Number(r.actual ?? r.planned) || 0;
+                                  const nextOwner = person === p1 ? p2 : person === p2 ? 'Joint' : p1;
+                                  return (
+                                    <div
+                                      key={r.id}
+                                      className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl bg-zinc-950/90 border border-zinc-800/90 text-xs"
+                                    >
+                                      <div className="min-w-0">
+                                        <div className="font-semibold text-zinc-100 truncate">{r.category}</div>
+                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                          <button
+                                            type="button"
+                                            onClick={() => db.monthly_budgets.update(r.id, { owner: nextOwner })}
+                                            className="px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-cyan-500/20 text-[10px] text-cyan-300 font-semibold"
+                                            title="Tap to cycle owner assignment"
+                                          >
+                                            Move → {nextOwner}
+                                          </button>
+                                          {dest && (
+                                            <span className="text-[10px] text-zinc-400 truncate">• {dest.name}</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <span
+                                        className={`font-bold shrink-0 tabular-nums ${
+                                          r.flow === 'income'
+                                            ? 'text-emerald-400'
+                                            : r.flow === 'savings_transfer'
+                                            ? 'text-indigo-300'
+                                            : 'text-zinc-200'
+                                        }`}
+                                      >
+                                        {r.flow === 'income' ? '+' : '−'}{formatGBP(amt)}
+                                      </span>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {segmentModes.monthly_planner === 'compact' ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -3873,7 +3990,17 @@ function App() {
                                 {row.category}
                                 {row.notes && <span className="block text-[11px] text-zinc-400 font-normal">{row.notes}</span>}
                               </td>
-                              <td className="py-2.5 px-4 text-zinc-300">{row.owner || 'Joint'}</td>
+                              <td className="py-2.5 px-4">
+                                <select
+                                  value={row.owner || 'Joint'}
+                                  onChange={(e) => db.monthly_budgets.update(row.id, { owner: e.target.value })}
+                                  className="bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-xs font-semibold text-cyan-300"
+                                >
+                                  {ownerOptions.map((o) => (
+                                    <option key={o} value={o}>{o}</option>
+                                  ))}
+                                </select>
+                              </td>
                               <td className="py-2.5 px-4 text-zinc-400">
                                 {destAcc ? `${destAcc.name} (${destAcc.owner})` : '—'}
                               </td>
@@ -3910,6 +4037,526 @@ function App() {
             )}
           </div>
         )}
+
+        {/* ====================================================================
+            VIEW 2B: ANNUAL FINANCIAL YEAR PLAN, ADHERENCE GRAPH & YoY TRACKER
+           ==================================================================== */}
+        {activeView === 'annual_planner' && (() => {
+          const allPlans = settingsMap.annual_plans || INITIAL_SETTINGS.annual_plans;
+          const currentYearPlan = allPlans[String(selectedYear)] || {
+            monthlySavingsTarget: sheetSavingsMetrics.activeMonthlyVelocity || 2500,
+            annualSavingsGoal: (sheetSavingsMetrics.activeMonthlyVelocity || 2500) * 12,
+            categoryBudgets: {}
+          };
+          const monthlyTarget = Number(currentYearPlan.monthlySavingsTarget) || 0;
+          const annualSavingsTarget = Number(currentYearPlan.annualSavingsGoal) || monthlyTarget * 12;
+          const catBudgets = currentYearPlan.categoryBudgets || {};
+
+          const updateYearPlan = async (patch) => {
+            const nextYearPlan = { ...currentYearPlan, ...patch };
+            const nextAllPlans = { ...allPlans, [String(selectedYear)]: nextYearPlan };
+            await saveSettingKey('annual_plans', nextAllPlans);
+          };
+
+          const updateCategoryBudget = async (cat, amountVal) => {
+            const nextCatBudgets = { ...catBudgets, [cat]: Math.max(0, Number(amountVal) || 0) };
+            await updateYearPlan({ categoryBudgets: nextCatBudgets });
+          };
+
+          // Build the 12 months of the Financial Year starting at fy_start_month (e.g., Apr 2026 -> Mar 2027)
+          const startM = Number(settingsMap.fy_start_month) || 4;
+          const fyMonths = Array.from({ length: 12 }, (_, idx) => {
+            const m0 = (startM - 1 + idx) % 12;
+            const yrOffset = startM - 1 + idx >= 12 ? 1 : 0;
+            const yr = Number(selectedYear) + yrOffset;
+            const mm = String(m0 + 1).padStart(2, '0');
+            const ym = `${yr}-${mm}`;
+            const shortLabel = `${MONTH_NAMES[m0].slice(0, 3)} '${String(yr).slice(2)}`;
+
+            // Actual savings transfers in this month from Monthly Cashflow Sheet
+            const mRows = monthlyBudgets.filter((r) => r.month === ym);
+            let grossSaved = mRows
+              .filter((r) => r.flow === 'savings_transfer')
+              .reduce((sum, r) => sum + (Number(r.actual ?? r.planned) || 0), 0);
+
+            if (grossSaved === 0 && mRows.length > 0) {
+              const inc = mRows.filter((r) => r.flow === 'income').reduce((sum, r) => sum + (Number(r.actual ?? r.planned) || 0), 0);
+              const bills = mRows.filter((r) => r.flow === 'fixed_outflow' || r.flow === 'variable_outflow').reduce((sum, r) => sum + (Number(r.actual ?? r.planned) || 0), 0);
+              grossSaved = Math.max(0, inc - bills);
+            }
+
+            // Weekly overspend variances in this month
+            const monthVariances = transactions
+              .filter((t) => t.type === 'weekly_variance' && (t.month === ym || (t.date || '').startsWith(ym)))
+              .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+            // Annual one-time expenditures in this month
+            const monthAnnualSpend = annualExpenses
+              .filter((e) => (e.date || '').startsWith(ym))
+              .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+            const netSaved = Math.max(0, grossSaved - monthVariances);
+            const hasActivity = mRows.length > 0 || monthVariances > 0 || monthAnnualSpend > 0;
+            const diffFromTarget = netSaved - monthlyTarget;
+            const status = !hasActivity
+              ? 'upcoming'
+              : netSaved >= monthlyTarget
+              ? 'on_track'
+              : netSaved >= monthlyTarget * 0.85
+              ? 'slight_dip'
+              : 'over_budget';
+
+            return {
+              ym,
+              shortLabel,
+              planned: monthlyTarget,
+              grossSaved,
+              monthVariances,
+              monthAnnualSpend,
+              netSaved,
+              hasActivity,
+              diffFromTarget,
+              status
+            };
+          });
+
+          // Cumulative running trajectory for SVG chart
+          let runningPlanned = 0;
+          let runningActual = 0;
+          const fyChartData = fyMonths.map((m) => {
+            runningPlanned += m.planned;
+            if (m.hasActivity) runningActual += m.netSaved;
+            return {
+              ...m,
+              cumPlanned: runningPlanned,
+              cumActual: m.hasActivity ? runningActual : null
+            };
+          });
+
+          const activeMonthsCount = fyMonths.filter((m) => m.hasActivity).length;
+          const ytdPlannedSoFar = activeMonthsCount * monthlyTarget;
+          const ytdActualSoFar = fyMonths.reduce((sum, m) => sum + m.netSaved, 0);
+          const adherenceScorePct = ytdPlannedSoFar > 0
+            ? Math.min(150, (ytdActualSoFar / ytdPlannedSoFar) * 100).toFixed(0)
+            : '100';
+
+          // Category Planned vs Actual Sinking Budgets & Unplanned Detection
+          const allPlanCategories = Array.from(
+            new Set([
+              ...expenseCategoryOptions,
+              ...Object.keys(catBudgets),
+              ...yearAnnualExpenses.map((e) => e.category)
+            ])
+          ).filter(Boolean);
+
+          const categoryComparisons = allPlanCategories.map((cat) => {
+            const planned = Number(catBudgets[cat]) || 0;
+            const actual = yearAnnualExpenses
+              .filter((e) => e.category === cat)
+              .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+            const variance = actual - planned;
+            const isUnplanned = planned === 0 && actual > 0;
+            const isOver = planned > 0 && actual > planned;
+            return { cat, planned, actual, variance, isUnplanned, isOver };
+          });
+
+          const totalPlannedAnnualBudgets = categoryComparisons.reduce((s, c) => s + c.planned, 0);
+          const totalUnplannedCategorySpend = categoryComparisons
+            .filter((c) => c.isUnplanned || c.isOver)
+            .reduce((s, c) => s + Math.max(0, c.actual - c.planned), 0);
+          const totalUnplannedOutflows = totalUnplannedCategorySpend + totalWeeklyVariancesSelectedYear;
+
+          const maxBarVal = Math.max(
+            monthlyTarget * 1.25,
+            ...fyMonths.map((m) => Math.max(m.planned, m.netSaved, 100))
+          );
+
+          // Year-on-Year (YoY) Multi-Year Comparison Data
+          const yoyYears = Array.from(new Set([2025, 2026, 2027, 2028, Number(selectedYear)])).sort((a, b) => a - b);
+          const yoyRows = yoyYears.map((yr) => {
+            const yrPlan = allPlans[String(yr)] || { monthlySavingsTarget: 2500, annualSavingsGoal: 30000, categoryBudgets: {} };
+            const yrGoal = Number(yrPlan.annualSavingsGoal) || (Number(yrPlan.monthlySavingsTarget) || 0) * 12;
+            const yrPlannedSpend = Object.values(yrPlan.categoryBudgets || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+
+            const yrMonths = Array.from(
+              new Set(monthlyBudgets.filter((r) => (r.month || '').startsWith(String(yr))).map((r) => r.month))
+            );
+            const yrGrossSaved = yrMonths.reduce((accSum, ym) => {
+              const rows = monthlyBudgets.filter((r) => r.month === ym && r.flow === 'savings_transfer');
+              return accSum + rows.reduce((s, r) => s + (Number(r.actual ?? r.planned) || 0), 0);
+            }, 0);
+
+            const yrVariances = transactions
+              .filter((t) => t.type === 'weekly_variance' && (Number(t.year) === yr || (t.date || '').startsWith(String(yr))))
+              .reduce((s, t) => s + (Number(t.amount) || 0), 0);
+
+            const yrNetSaved = Math.max(0, yrGrossSaved - yrVariances);
+            const yrActualAnnualSpend = annualExpenses
+              .filter((e) => Number(e.year || (e.date || '').slice(0, 4)) === yr)
+              .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+
+            const yrAdherencePct = yrGoal > 0 ? ((yrNetSaved / yrGoal) * 100).toFixed(0) : '0';
+            return {
+              yr,
+              yrGoal,
+              yrNetSaved,
+              yrPlannedSpend,
+              yrActualAnnualSpend,
+              yrVariances,
+              yrAdherencePct,
+              monthsLogged: yrMonths.length
+            };
+          });
+
+          return (
+            <div className="space-y-5">
+              {/* Header Bar */}
+              <div className="rounded-2xl bg-zinc-900/80 border border-zinc-800 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                    <TrendingUp className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h1 className="text-lg sm:text-xl font-bold text-white">
+                        FY {selectedYear} Annual Plan & Adherence
+                      </h1>
+                      {renderInfoButton('annual_planner')}
+                    </div>
+                    <p className="text-xs text-zinc-400">
+                      Window: <strong className="text-zinc-200">{financialYearLabel}</strong>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <ExpandableYearWheelDropdown
+                    selectedYear={selectedYear}
+                    availableYears={allAvailableYears}
+                    onSelectYear={(yr) => {
+                      setSelectedYear(yr);
+                      setSelectedMonth(`${yr}-${selectedMonth.slice(5, 7)}`);
+                    }}
+                    onAddYear={handleAddYearToWheel}
+                  />
+                  {renderModeToggleButton('annual_planner')}
+                </div>
+              </div>
+
+              {/* 4 KPI Summary Tiles: Adherence Score, Planned vs Actual YTD, Annual Sinking Budget, Unplanned Outflows */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="p-4 rounded-2xl bg-zinc-900/85 border border-emerald-500/30 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-zinc-400">YTD Plan Adherence</span>
+                    <span
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                        Number(adherenceScorePct) >= 95
+                          ? 'bg-emerald-500/15 text-emerald-400'
+                          : Number(adherenceScorePct) >= 80
+                          ? 'bg-amber-500/15 text-amber-300'
+                          : 'bg-rose-500/15 text-rose-400'
+                      }`}
+                    >
+                      {Number(adherenceScorePct) >= 95 ? 'On Track' : 'Needs Attention'}
+                    </span>
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-extrabold text-white mt-2 tabular-nums">
+                    {adherenceScorePct}%
+                  </div>
+                  <div className="text-[11px] text-zinc-400 mt-1 tabular-nums">
+                    {formatGBP(ytdActualSoFar)} saved vs {formatGBP(ytdPlannedSoFar)} target ({activeMonthsCount} mos)
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-zinc-900/85 border border-zinc-800 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-zinc-400">FY Monthly Target</span>
+                    <span className="text-[10px] text-indigo-300 font-semibold">Editable</span>
+                  </div>
+                  <div className="flex items-baseline gap-1.5 mt-2">
+                    <span className="text-lg font-bold text-zinc-400">£</span>
+                    <input
+                      type="number"
+                      step="50"
+                      value={monthlyTarget}
+                      onChange={(e) => {
+                        const val = Math.max(0, Number(e.target.value) || 0);
+                        updateYearPlan({
+                          monthlySavingsTarget: val,
+                          annualSavingsGoal: val * 12
+                        });
+                      }}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-2.5 py-1 text-lg sm:text-xl font-extrabold text-emerald-400 tabular-nums"
+                    />
+                  </div>
+                  <div className="text-[11px] text-zinc-400 mt-1 tabular-nums">
+                    Full Year Goal: <strong className="text-white">{formatGBP(annualSavingsTarget)}/yr</strong>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-zinc-900/85 border border-zinc-800 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-zinc-400">Planned Sinking Spend</span>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 tabular-nums">
+                      {totalPlannedAnnualBudgets > 0
+                        ? `${((totalAnnualExpendituresSelectedYear / totalPlannedAnnualBudgets) * 100).toFixed(0)}% used`
+                        : '0%'}
+                    </span>
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-extrabold text-white mt-2 tabular-nums">
+                    {formatGBP(totalAnnualExpendituresSelectedYear)}
+                  </div>
+                  <div className="text-[11px] text-zinc-400 mt-1 tabular-nums">
+                    of {formatGBP(totalPlannedAnnualBudgets)} planned for {selectedYear}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-zinc-900/85 border border-rose-500/30 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-rose-300">Unplanned & Overspends</span>
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-extrabold text-rose-400 mt-2 tabular-nums">
+                    {formatGBP(totalUnplannedOutflows)}
+                  </div>
+                  <div className="text-[11px] text-zinc-400 mt-1 tabular-nums">
+                    {formatGBP(totalWeeklyVariancesSelectedYear)} wkly + {formatGBP(totalUnplannedCategorySpend)} annual over
+                  </div>
+                </div>
+              </div>
+
+              {/* MONTH-BY-MONTH PLANNED VS ACTUAL ADHERENCE GRAPH (Interactive 12-Month Visual Chart) */}
+              <div className="rounded-2xl bg-zinc-900/85 border border-zinc-800 p-4 sm:p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h2 className="text-base sm:text-lg font-bold text-white">
+                      Month-by-Month Trajectory ({financialYearLabel})
+                    </h2>
+                    <p className="text-xs text-zinc-400">
+                      Tap any month bar to open that month’s cashflow sheet. Green = met target, Amber = slight dip, Rose = over budget.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="inline-flex items-center gap-1.5 text-zinc-300">
+                      <span className="w-2.5 h-2.5 rounded-sm bg-zinc-700 inline-block" /> Planned ({formatGBP(monthlyTarget)}/mo)
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-emerald-400 font-semibold">
+                      <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> Net Saved
+                    </span>
+                  </div>
+                </div>
+
+                {/* 12-Month Dual Bar Chart */}
+                <div className="grid grid-cols-6 sm:grid-cols-12 gap-2 pt-3 pb-1 items-end">
+                  {fyMonths.map((m) => {
+                    const plannedHeightPct = maxBarVal > 0 ? Math.max(8, Math.round((m.planned / maxBarVal) * 100)) : 50;
+                    const actualHeightPct = m.hasActivity && maxBarVal > 0
+                      ? Math.max(8, Math.round((m.netSaved / maxBarVal) * 100))
+                      : 4;
+
+                    const barColor = !m.hasActivity
+                      ? 'bg-zinc-800/50 border border-dashed border-zinc-700'
+                      : m.status === 'on_track'
+                      ? 'bg-emerald-500'
+                      : m.status === 'slight_dip'
+                      ? 'bg-amber-400'
+                      : 'bg-rose-500';
+
+                    return (
+                      <div
+                        key={m.ym}
+                        onClick={() => {
+                          setSelectedMonth(m.ym);
+                          setActiveView('monthly_planner');
+                        }}
+                        className="cursor-pointer group flex flex-col items-center p-2 rounded-xl bg-zinc-950/70 hover:bg-zinc-950 border border-zinc-800/80 hover:border-emerald-500/40 transition-all"
+                      >
+                        <div className="text-[10px] font-bold text-zinc-300 mb-1 tabular-nums">
+                          {m.hasActivity ? formatGBP(m.netSaved) : '—'}
+                        </div>
+
+                        {/* Bar Container */}
+                        <div className="w-full h-28 flex items-end justify-center gap-1 px-1">
+                          {/* Planned Bar */}
+                          <div
+                            style={{ height: `${plannedHeightPct}%` }}
+                            className="w-2.5 rounded-t bg-zinc-700/80 transition-all"
+                            title={`Planned: ${formatGBP(m.planned)}`}
+                          />
+                          {/* Actual Bar */}
+                          <div
+                            style={{ height: `${actualHeightPct}%` }}
+                            className={`w-3.5 rounded-t transition-all ${barColor}`}
+                            title={`Actual Net Saved: ${formatGBP(m.netSaved)}`}
+                          />
+                        </div>
+
+                        <div className="text-[10px] font-semibold text-zinc-400 mt-1.5 group-hover:text-white">
+                          {m.shortLabel}
+                        </div>
+                        <div
+                          className={`text-[9px] font-bold mt-0.5 tabular-nums ${
+                            !m.hasActivity
+                              ? 'text-zinc-600'
+                              : m.diffFromTarget >= 0
+                              ? 'text-emerald-400'
+                              : 'text-rose-400'
+                          }`}
+                        >
+                          {!m.hasActivity
+                            ? 'Future'
+                            : m.diffFromTarget >= 0
+                            ? `+${formatGBP(m.diffFromTarget)}`
+                            : formatGBP(m.diffFromTarget)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {segmentModes.annual_planner !== 'compact' && (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                  {/* LEFT 7 COLS: BEGINNING-OF-YEAR CATEGORY BUDGET PLAN VS ACTUAL & UNPLANNED DETECTOR */}
+                  <div className="lg:col-span-7 rounded-2xl bg-zinc-900/85 border border-zinc-800 p-4 sm:p-5 space-y-4">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div>
+                        <h2 className="text-base font-bold text-white">
+                          {selectedYear} Annual Sinking Budgets: Planned vs. Actual
+                        </h2>
+                        <p className="text-xs text-zinc-400">
+                          Set your start-of-year budget for each category. Any spend beyond planned is flagged as Unplanned.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setNewCategoryModalOpen(true)}
+                        className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-cyan-300 border border-zinc-700 inline-flex items-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Expense</span>
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {categoryComparisons.map((c) => {
+                        const pctUsed = c.planned > 0 ? Math.min(100, Math.round((c.actual / c.planned) * 100)) : c.actual > 0 ? 100 : 0;
+                        return (
+                          <div key={c.cat} className="p-3.5 rounded-xl bg-zinc-950/85 border border-zinc-800/90 space-y-2">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-white">{c.cat}</span>
+                                {c.isUnplanned && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                    Unplanned Category
+                                  </span>
+                                )}
+                                {c.isOver && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                    Over by {formatGBP(c.actual - c.planned)}
+                                  </span>
+                                )}
+                                {!c.isUnplanned && !c.isOver && c.planned > 0 && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400">
+                                    {formatGBP(c.planned - c.actual)} left
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-2 text-xs tabular-nums">
+                                <span className="text-zinc-400">Actual: <strong className="text-white">{formatGBP(c.actual)}</strong></span>
+                                <span className="text-zinc-600">/</span>
+                                <span className="text-zinc-400">Plan £</span>
+                                <input
+                                  type="number"
+                                  step="50"
+                                  value={c.planned}
+                                  onChange={(e) => updateCategoryBudget(c.cat, e.target.value)}
+                                  className="w-20 bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-right font-bold text-cyan-300 tabular-nums"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="h-2 w-full rounded-full bg-zinc-900 overflow-hidden">
+                              <div
+                                style={{ width: `${pctUsed}%` }}
+                                className={`h-full rounded-full transition-all ${
+                                  c.isUnplanned || c.isOver ? 'bg-rose-500' : 'bg-emerald-500'
+                                }`}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* RIGHT 5 COLS: YEAR-ON-YEAR (YoY) MULTI-YEAR COMPARISON SCORECARD */}
+                  <div className="lg:col-span-5 rounded-2xl bg-zinc-900/85 border border-zinc-800 p-4 sm:p-5 space-y-4">
+                    <div>
+                      <h2 className="text-base font-bold text-white">
+                        Year-on-Year (YoY) Comparison
+                      </h2>
+                      <p className="text-xs text-zinc-400">
+                        Compare your annual savings goals, actual net savings, and unplanned variances across financial years.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {yoyRows.map((row) => {
+                        const isCurr = row.yr === Number(selectedYear);
+                        return (
+                          <div
+                            key={row.yr}
+                            onClick={() => setSelectedYear(row.yr)}
+                            className={`cursor-pointer p-3.5 rounded-xl border transition-all space-y-2 ${
+                              isCurr
+                                ? 'bg-zinc-950 border-emerald-500/40 shadow-md'
+                                : 'bg-zinc-950/60 border-zinc-800 hover:border-zinc-700'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-extrabold text-white">FY {row.yr}</span>
+                                <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-900 text-zinc-400">
+                                  {row.monthsLogged} mos logged
+                                </span>
+                              </div>
+                              <span
+                                className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${
+                                  Number(row.yrAdherencePct) >= 80
+                                    ? 'bg-emerald-500/15 text-emerald-400'
+                                    : 'bg-zinc-800 text-zinc-300'
+                                }`}
+                              >
+                                {row.yrAdherencePct}% of Goal
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 text-xs tabular-nums pt-1">
+                              <div>
+                                <div className="text-[10px] text-zinc-400">Savings Goal</div>
+                                <div className="font-bold text-zinc-200">{formatGBP(row.yrGoal)}</div>
+                              </div>
+                              <div>
+                                <div className="text-[10px] text-zinc-400">Net Saved</div>
+                                <div className="font-bold text-emerald-400">{formatGBP(row.yrNetSaved)}</div>
+                              </div>
+                              <div>
+                                <div className="text-[10px] text-zinc-400">Annual Spend</div>
+                                <div className="font-bold text-cyan-300">{formatGBP(row.yrActualAnnualSpend)}</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ====================================================================
             VIEW 3: MASTER OVERVIEW (Grouped iPhone Cards + Table Toggle + iPhone Share/Backup)
@@ -5035,11 +5682,11 @@ function App() {
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/95 backdrop-blur-lg border-t border-zinc-800/90"
       >
-        <div className="grid grid-cols-4 h-14 px-2">
+        <div className="grid grid-cols-5 h-14 px-1">
           <button
             type="button"
             onClick={() => setActiveView('dashboard')}
-            className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors ${
+            className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors ${
               activeView === 'dashboard' ? 'text-emerald-400' : 'text-zinc-400'
             }`}
           >
@@ -5049,27 +5696,37 @@ function App() {
           <button
             type="button"
             onClick={() => setActiveView('monthly_planner')}
-            className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors ${
+            className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors ${
               activeView === 'monthly_planner' ? 'text-emerald-400' : 'text-zinc-400'
             }`}
           >
             <ArrowRightLeft className="w-4 h-4" />
-            <span>Cashflow</span>
+            <span>Monthly</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('annual_planner')}
+            className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors ${
+              activeView === 'annual_planner' ? 'text-emerald-400' : 'text-zinc-400'
+            }`}
+          >
+            <TrendingUp className="w-4 h-4" />
+            <span>Annual YoY</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveView('data_ledger')}
-            className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors ${
+            className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors ${
               activeView === 'data_ledger' ? 'text-emerald-400' : 'text-zinc-400'
             }`}
           >
             <Table className="w-4 h-4" />
-            <span>Data Sheet</span>
+            <span>Overview</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveView('settings')}
-            className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors ${
+            className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors ${
               activeView === 'settings' ? 'text-emerald-400' : 'text-zinc-400'
             }`}
           >
