@@ -9,6 +9,31 @@
     <link rel="manifest" href="./manifest.json" />
     <link rel="apple-touch-icon" href="./icon-192.svg" />
     <title>Household Finance</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        max-width: 100vw;
+        overflow-x: hidden;
+        background-color: #09090b;
+        color: #f4f4f5;
+        -webkit-text-size-adjust: 100%;
+      }
+      /* Prevent iOS Safari auto-zoom on form inputs */
+      @media screen and (max-width: 768px) {
+        input, select, textarea {
+          font-size: 16px !important;
+        }
+      }
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+    </style>
     <script src="https://cdn.tailwindcss.com/3.4.17"></script>
     <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
@@ -18,7 +43,6 @@
     <div id="root"></div>
     <script type="text/babel">
 
-// Built-in crisp SVG icon components (zero external CDN dependency)
 const _SVG_PATHS = {
   Wallet: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
   TrendingUp: '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
@@ -2065,7 +2089,7 @@ function App() {
           >
             <div className="flex items-baseline justify-between flex-wrap gap-3">
               <div>
-                <div className="font-mono text-4xl sm:text-5xl font-bold tracking-tight text-white group-hover:text-emerald-300 transition-colors">
+                <div className="font-mono text-3xl sm:text-5xl font-bold tracking-tight text-white break-all group-hover:text-emerald-300 transition-colors">
                   {formatGBP(totalSavingsTillDate)}
                 </div>
                 <div className="text-[11px] text-emerald-400 font-mono mt-1">
@@ -3140,12 +3164,18 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-emerald-500/30 selection:text-emerald-200 pb-16">
-      {/* TOP BAR */}
-      <header className="sticky top-0 z-30 backdrop-blur-md bg-zinc-950/90 border-b border-zinc-800/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
-          {/* Navigation Tabs */}
-          <div className="inline-flex p-1 rounded-xl bg-zinc-900 border border-zinc-800 overflow-x-auto max-w-full">
+    <div
+      style={{
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+        paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 5.25rem)'
+      }}
+      className="min-h-screen w-full max-w-full overflow-x-hidden bg-zinc-950 text-zinc-100 font-sans selection:bg-emerald-500/30 selection:text-emerald-200"
+    >
+      {/* SAFE-AREA TOP BAR (Never clips under iPhone Dynamic Island / Notch) */}
+      <header className="w-full bg-zinc-950/95 border-b border-zinc-800/80">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 flex items-center justify-between gap-2">
+          {/* Desktop Navigation Tabs (Hidden on small iPhone screens in favor of fixed iOS Bottom Tab Bar) */}
+          <div className="hidden md:inline-flex p-1 rounded-xl bg-zinc-900 border border-zinc-800">
             <button
               type="button"
               onClick={() => setActiveView('dashboard')}
@@ -3187,83 +3217,85 @@ function App() {
             </button>
           </div>
 
-          {/* Right Quick Actions: Partner Names Pill, Global Compact/Expand, Clear Demo Data, iPhone Guide */}
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Mobile & Desktop Quick Action Strip (Fits on 1 clean line on iPhone) */}
+          <div className="flex items-center justify-between md:justify-end gap-1.5 w-full md:w-auto overflow-x-auto no-scrollbar">
             {/* Clickable Partner Names Badge */}
             <button
               type="button"
               onClick={() => setPartnersModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 transition-colors"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 transition-colors shrink-0"
               title="Click to customize your name and your partner's name"
             >
-              <Users className="w-3.5 h-3.5" />
-              <span>{settingsMap.my_name} & {settingsMap.partner_name}</span>
+              <Users className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate max-w-[110px] sm:max-w-none">{settingsMap.my_name} & {settingsMap.partner_name}</span>
             </button>
 
-            {/* Global Compact / Expanded Mode Toggle */}
-            <button
-              type="button"
-              onClick={() => setAllSegmentsMode(allCompact ? 'expanded' : 'compact')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800"
-              title="Toggle all segments between Compact and Expanded view"
-            >
-              {allCompact ? <Maximize2 className="w-3.5 h-3.5 text-emerald-400" /> : <Minimize2 className="w-3.5 h-3.5 text-emerald-400" />}
-              <span>{allCompact ? 'Expand All' : 'Compact All'}</span>
-            </button>
-
-            {!settingsMap.demo_cleared && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Global Compact / Expanded Mode Toggle */}
               <button
                 type="button"
-                onClick={() => setConfirmClearModal(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30"
+                onClick={() => setAllSegmentsMode(allCompact ? 'expanded' : 'compact')}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 shrink-0"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Clear Demo Data</span>
+                {allCompact ? <Maximize2 className="w-3.5 h-3.5 text-emerald-400" /> : <Minimize2 className="w-3.5 h-3.5 text-emerald-400" />}
+                <span>{allCompact ? 'Expand All' : 'Compact All'}</span>
               </button>
-            )}
 
-            <button
-              type="button"
-              onClick={() => setIosGuideOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden md:inline">iPhone Ready</span>
-            </button>
+              {!settingsMap.demo_cleared && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmClearModal(true)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 shrink-0"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Clear Demo</span>
+                </button>
+              )}
 
-            {activeView === 'dashboard' && editGridMode && (
               <button
                 type="button"
-                onClick={async () => {
-                  await saveSettingKey('layout', DEFAULT_WIDGET_LAYOUT);
-                  showToast('Dashboard layout reset to default.');
-                }}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200"
+                onClick={() => setIosGuideOpen(true)}
+                className="inline-flex items-center gap-1 px-2 py-1.5 rounded-xl text-[11px] sm:text-xs font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 shrink-0"
+                title="iPhone Setup Guide"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
-                Reset Default Grid
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">iPhone Ready</span>
               </button>
-            )}
 
-            {activeView === 'dashboard' && (
-              <button
-                type="button"
-                onClick={() => setEditGridMode((p) => !p)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border ${
-                  editGridMode
-                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
-                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-800'
-                }`}
-              >
-                <Sliders className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">{editGridMode ? 'Done' : 'Layout'}</span>
-              </button>
-            )}
+              {activeView === 'dashboard' && editGridMode && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await saveSettingKey('layout', DEFAULT_WIDGET_LAYOUT);
+                    showToast('Dashboard layout reset to default.');
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-[11px] text-zinc-200 shrink-0"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Reset Default Grid</span>
+                </button>
+              )}
+
+              {activeView === 'dashboard' && (
+                <button
+                  type="button"
+                  onClick={() => setEditGridMode((p) => !p)}
+                  className={`hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium border shrink-0 ${
+                    editGridMode
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                      : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-800'
+                  }`}
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>{editGridMode ? 'Done' : 'Layout'}</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-5 space-y-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 sm:pt-5 space-y-4 sm:space-y-6">
         {/* DUAL PARTNER PAY DAY REMINDER BAR */}
         {(isMyPayDay || isPartnerPayDay) ? (
           <div className="rounded-2xl bg-gradient-to-r from-emerald-950/90 via-zinc-900 to-zinc-900 border border-emerald-500/40 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -4242,7 +4274,7 @@ function App() {
          ====================================================================== */}
       {partnersModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl bg-zinc-900 border border-zinc-700 p-6 space-y-4 shadow-2xl">
+          <div className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl bg-zinc-900 border border-zinc-700 p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-cyan-400" />
@@ -4313,7 +4345,7 @@ function App() {
       {/* MODAL: `i` INFO EXPLAINER */}
       {activeExplainerKey && INFO_EXPLAINERS[activeExplainerKey] && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-zinc-900 border border-zinc-700 p-6 space-y-4 shadow-2xl">
+          <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl bg-zinc-900 border border-zinc-700 p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
@@ -4361,7 +4393,7 @@ function App() {
       {/* MODAL: iPHONE GUIDE */}
       {iosGuideOpen && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl bg-zinc-900 border border-zinc-700 p-6 space-y-4 shadow-2xl">
+          <div className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl bg-zinc-900 border border-zinc-700 p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-emerald-400" />
@@ -4399,7 +4431,7 @@ function App() {
       {/* MODAL: PAY DAY SALARY & ALLOCATION */}
       {payDayModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl bg-zinc-900 border border-zinc-800 p-6 space-y-4 shadow-2xl">
+          <div className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl bg-zinc-900 border border-zinc-800 p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-white">Log Salary & Post-Payday Allocations</h3>
               <button type="button" onClick={() => setPayDayModalOpen(false)} className="text-zinc-400 hover:text-white">
@@ -4517,7 +4549,7 @@ function App() {
       {/* MODAL: ADD / SCHEDULE ANNUAL EXPENDITURE (With Custom Category Dropdown & Expandable Year) */}
       {newCategoryModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl bg-zinc-900 border border-zinc-800 p-6 space-y-4 shadow-2xl">
+          <div className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl bg-zinc-900 border border-zinc-800 p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-white">Add / Schedule Annual Expenditure</h3>
               <button type="button" onClick={() => setNewCategoryModalOpen(false)} className="text-zinc-400 hover:text-white">
@@ -4626,7 +4658,7 @@ function App() {
       {/* MODAL: ONE-TIME CLEAR DEMO DATA */}
       {confirmClearModal && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl bg-zinc-900 border border-rose-500/40 p-6 space-y-4 shadow-2xl">
+          <div className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl bg-zinc-900 border border-rose-500/40 p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-rose-400">
                 <AlertTriangle className="w-5 h-5" />
@@ -4659,16 +4691,67 @@ function App() {
         </div>
       )}
 
-      {/* TOAST NOTIFICATION */}
+      {/* iPHONE / MOBILE FIXED BOTTOM NAVIGATION BAR (Thumb-friendly, respects iOS Home Indicator safe area) */}
+      <nav
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/95 backdrop-blur-lg border-t border-zinc-800/90"
+      >
+        <div className="grid grid-cols-4 h-14 px-2">
+          <button
+            type="button"
+            onClick={() => setActiveView('dashboard')}
+            className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors ${
+              activeView === 'dashboard' ? 'text-emerald-400' : 'text-zinc-400'
+            }`}
+          >
+            <Wallet className="w-4 h-4" />
+            <span>Dashboard</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('monthly_planner')}
+            className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors ${
+              activeView === 'monthly_planner' ? 'text-emerald-400' : 'text-zinc-400'
+            }`}
+          >
+            <ArrowRightLeft className="w-4 h-4" />
+            <span>Cashflow</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('data_ledger')}
+            className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors ${
+              activeView === 'data_ledger' ? 'text-emerald-400' : 'text-zinc-400'
+            }`}
+          >
+            <Table className="w-4 h-4" />
+            <span>Data Sheet</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('settings')}
+            className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors ${
+              activeView === 'settings' ? 'text-emerald-400' : 'text-zinc-400'
+            }`}
+          >
+            <Settings className="w-4 h-4" />
+            <span>Settings</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* TOAST NOTIFICATION (Positioned above iPhone bottom nav bar) */}
       {toast && (
-        <div className="fixed bottom-5 right-5 z-50 max-w-sm rounded-xl bg-zinc-900/95 border border-zinc-700 px-4 py-3 shadow-2xl flex items-center gap-3">
-          {toast.type === 'error' ? (
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-          ) : (
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          )}
-          <span className="text-xs text-zinc-100 font-medium">{toast.message}</span>
-          <button type="button" onClick={() => setToast(null)} className="text-zinc-500 hover:text-zinc-300">
+        <div className="fixed bottom-20 md:bottom-5 left-3 right-3 md:left-auto md:right-5 z-50 md:max-w-sm rounded-xl bg-zinc-900/95 border border-zinc-700 px-4 py-3 shadow-2xl flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {toast.type === 'error' ? (
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            )}
+            <span className="text-xs text-zinc-100 font-medium truncate">{toast.message}</span>
+          </div>
+          <button type="button" onClick={() => setToast(null)} className="text-zinc-500 hover:text-zinc-300 shrink-0">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
